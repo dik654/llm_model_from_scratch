@@ -1,0 +1,48 @@
+[package]
+name = "llm_from_scratch"
+version = "0.1.0"
+edition = "2021"
+description = "Educational LLM implementation from scratch in Rust - for presentation and teaching"
+authors = ["Kim Daeik"]
+
+[dependencies]
+# Tensor operations (pure Rust, no external BLAS needed)
+ndarray = "0.16"
+
+# Random number generation
+rand = "0.8"
+rand_distr = "0.4"
+
+# Terminal visualization
+ratatui = "0.29"
+crossterm = "0.28"
+
+# Serialization (for saving/loading models)
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Unicode text handling
+unicode-segmentation = "1.10"
+
+# Parallel computation (optional, for performance)
+rayon = "1.10"
+
+[dev-dependencies]
+# For testing
+approx = "0.5"
+
+[[example]]
+name = "demo"
+path = "examples/demo.rs"
+
+[[example]]
+name = "train"
+path = "examples/train.rs"
+
+[[example]]
+name = "visualize"
+path = "examples/visualize.rs"
+
+[profile.release]
+opt-level = 3
+lto = true
