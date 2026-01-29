@@ -33,11 +33,30 @@
                     </div>
                     <div class="control-row">
                         <label>Speed: <span id="speed-value">500</span>ms</label>
-                        <input type="range" id="speed" min="100" max="2000" step="100" value="500">
+                        <input type="range" id="speed" min="100" max="5000" step="100" value="500">
                     </div>
+
+                    <!-- 실행 모드 선택 -->
+                    <div class="control-row">
+                        <label>Mode:</label>
+                        <div class="mode-toggle">
+                            <button id="mode-auto" class="mode-btn active">자동</button>
+                            <button id="mode-manual" class="mode-btn">수동</button>
+                        </div>
+                    </div>
+
                     <div class="btn-group">
                         <button id="btn-run" class="btn btn-primary">Run</button>
                         <button id="btn-stop" class="btn btn-danger" disabled>Stop</button>
+                    </div>
+
+                    <!-- 수동 컨트롤 -->
+                    <div class="manual-controls" id="manual-controls" style="display: none;">
+                        <div class="btn-group">
+                            <button id="btn-prev" class="btn btn-secondary" disabled>◀ 이전</button>
+                            <button id="btn-pause" class="btn btn-secondary" disabled>⏸ 일시정지</button>
+                            <button id="btn-next" class="btn btn-secondary" disabled>다음 ▶</button>
+                        </div>
                     </div>
                 </div>
 

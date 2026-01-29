@@ -16,13 +16,13 @@ use axum::{
 use futures::{sink::SinkExt, stream::StreamExt};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::time::Duration;
-use tokio::sync::broadcast;
+use tokio::sync::{broadcast, mpsc, Mutex};
 use tokio::time::sleep;
 use tower_http::cors::CorsLayer;
 
 use llm_from_scratch::prelude::*;
-// tensor types imported if needed
 
 // ==================== 실행 스텝 정의 ====================
 #[derive(Clone, Serialize, Debug)]
@@ -134,19 +134,58 @@ struct TokenProb {
     probability: f32,
 }
 
+// ==================== 컨트롤 명령 ====================
+#[derive(Debug, Clone)]
+enum ControlCommand {
+    Pause,
+    Resume,
+    NextStep,
+    PrevStep,
+    SetManualMode(bool),
+}
+
 // ==================== 앱 상태 ====================
 struct AppState {
     tx: broadcast::Sender<ExecutionStep>,
-    speed_ms: std::sync::atomic::AtomicU64,
+    speed_ms: AtomicU64,
+    paused: AtomicBool,
+    manual_mode: AtomicBool,
+    current_step: AtomicUsize,
+    cmd_tx: mpsc::Sender<ControlCommand>,
+    steps_cache: Mutex<Vec<ExecutionStep>>,
 }
 
 impl AppState {
     fn get_delay(&self) -> Duration {
-        Duration::from_millis(self.speed_ms.load(std::sync::atomic::Ordering::Relaxed))
+        Duration::from_millis(self.speed_ms.load(Ordering::Relaxed))
     }
 
     fn set_delay(&self, ms: u64) {
-        self.speed_ms.store(ms, std::sync::atomic::Ordering::Relaxed);
+        self.speed_ms.store(ms, Ordering::Relaxed);
+    }
+
+    fn is_paused(&self) -> bool {
+        self.paused.load(Ordering::Relaxed)
+    }
+
+    fn set_paused(&self, paused: bool) {
+        self.paused.store(paused, Ordering::Relaxed);
+    }
+
+    fn is_manual_mode(&self) -> bool {
+        self.manual_mode.load(Ordering::Relaxed)
+    }
+
+    fn set_manual_mode(&self, manual: bool) {
+        self.manual_mode.store(manual, Ordering::Relaxed);
+    }
+
+    fn get_current_step(&self) -> usize {
+        self.current_step.load(Ordering::Relaxed)
+    }
+
+    fn set_current_step(&self, step: usize) {
+        self.current_step.store(step, Ordering::Relaxed);
     }
 }
 
@@ -158,14 +197,52 @@ struct RunRequest {
 }
 
 #[derive(Deserialize)]
-struct SpeedRequest {
-    delay_ms: u64,
+#[serde(untagged)]
+enum ClientMessage {
+    Run {
+        text: String,
+        generate_tokens: Option<usize>,
+    },
+    Speed {
+        delay_ms: u64,
+    },
+    Control {
+        command: String,  // "pause", "resume", "next", "prev", "manual_on", "manual_off"
+    },
 }
 
 #[derive(Serialize)]
 struct StatusResponse {
     status: String,
     delay_ms: u64,
+    paused: bool,
+    manual_mode: bool,
+}
+
+// ==================== 스텝 전송 헬퍼 ====================
+async fn send_step_with_pause(state: &Arc<AppState>, step: ExecutionStep) {
+    // 스텝 캐시에 저장
+    {
+        let mut cache = state.steps_cache.lock().await;
+        cache.push(step.clone());
+        state.set_current_step(cache.len());
+    }
+
+    // 스텝 전송
+    let _ = state.tx.send(step);
+
+    // 수동 모드일 경우 일시정지 상태로 전환하고 대기
+    if state.is_manual_mode() {
+        state.set_paused(true);
+    }
+
+    // 일시정지 상태면 대기
+    while state.is_paused() {
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+
+    // 딜레이 적용
+    tokio::time::sleep(state.get_delay()).await;
 }
 
 // ==================== 스텝별 실행 ====================
@@ -188,18 +265,17 @@ async fn run_step_by_step(
         .collect();
 
     // 1. 시작
-    let _ = state.tx.send(ExecutionStep::Start {
+    send_step_with_pause(&state, ExecutionStep::Start {
         text: text.clone(),
         tokens: tokens.clone(),
-    });
-    sleep(state.get_delay()).await;
+    }).await;
 
     // 2. 토큰 임베딩
     for (i, &token_id) in tokens.iter().enumerate() {
         let embedding = &model.token_embedding.weight.row(token_id);
         let sample: Vec<f32> = embedding.iter().take(8).cloned().collect();
 
-        let _ = state.tx.send(ExecutionStep::TokenEmbedding {
+        send_step_with_pause(&state, ExecutionStep::TokenEmbedding {
             step: i,
             token_id,
             token_char: token_chars[i].clone(),
@@ -208,8 +284,7 @@ async fn run_step_by_step(
                 "embedding[{}] = token_embedding.weights[{}]\n// Shape: (1, {})",
                 i, token_id, config.d_model
             ),
-        });
-        sleep(state.get_delay()).await;
+        }).await;
     }
 
     // 3. 위치 인코딩
@@ -218,7 +293,7 @@ async fn run_step_by_step(
             .map(|d| model.position_encoding[[pos, d]])
             .collect();
 
-        let _ = state.tx.send(ExecutionStep::PositionEncoding {
+        send_step_with_pause(&state, ExecutionStep::PositionEncoding {
             step: pos,
             position: pos,
             encoding_sample: pos_enc,
@@ -226,8 +301,7 @@ async fn run_step_by_step(
                 "x[{}] += position_encoding[{}]\n// sin/cos pattern for position {}",
                 pos, pos, pos
             ),
-        });
-        sleep(state.get_delay()).await;
+        }).await;
     }
 
     // 4. Transformer 블록
@@ -248,7 +322,7 @@ async fn run_step_by_step(
         let std = (current_input.iter().map(|x| (x - mean).powi(2)).sum::<f32>()
             / current_input.len() as f32).sqrt();
 
-        let _ = state.tx.send(ExecutionStep::LayerNorm {
+        send_step_with_pause(&state, ExecutionStep::LayerNorm {
             layer: layer_idx,
             location: "pre_attention".to_string(),
             mean,
@@ -257,27 +331,25 @@ async fn run_step_by_step(
                 "// Layer {} - Pre-Attention LayerNorm\nx = layer_norm(x)\n// mean={:.4}, std={:.4}",
                 layer_idx, mean, std
             ),
-        });
-        sleep(state.get_delay()).await;
+        }).await;
 
         // Attention
         for head_idx in 0..config.num_heads {
-            let _ = state.tx.send(ExecutionStep::AttentionStart {
+            send_step_with_pause(&state, ExecutionStep::AttentionStart {
                 layer: layer_idx,
                 head: head_idx,
                 code: format!(
                     "// Layer {} Head {}\n// Computing Q, K, V projections...",
                     layer_idx, head_idx
                 ),
-            });
-            sleep(state.get_delay()).await;
+            }).await;
 
             // QKV (시뮬레이션)
             let q_sample: Vec<f32> = (0..8).map(|i| (i as f32 * 0.1).sin()).collect();
             let k_sample: Vec<f32> = (0..8).map(|i| (i as f32 * 0.15).cos()).collect();
             let v_sample: Vec<f32> = (0..8).map(|i| (i as f32 * 0.2).sin()).collect();
 
-            let _ = state.tx.send(ExecutionStep::AttentionQKV {
+            send_step_with_pause(&state, ExecutionStep::AttentionQKV {
                 layer: layer_idx,
                 head: head_idx,
                 q_sample,
@@ -287,8 +359,7 @@ async fn run_step_by_step(
                     "Q = x @ W_q  // Query\nK = x @ W_k  // Key\nV = x @ W_v  // Value\n// head_dim = {}",
                     config.d_model / config.num_heads
                 ),
-            });
-            sleep(state.get_delay()).await;
+            }).await;
 
             // Attention scores
             let seq_len = tokens.len();
@@ -305,7 +376,7 @@ async fn run_step_by_step(
                 }
             }
 
-            let _ = state.tx.send(ExecutionStep::AttentionScores {
+            send_step_with_pause(&state, ExecutionStep::AttentionScores {
                 layer: layer_idx,
                 head: head_idx,
                 scores: scores.clone(),
@@ -313,11 +384,10 @@ async fn run_step_by_step(
                     "scores = Q @ K.T / sqrt(d_k)\n// Scaled dot-product\n// d_k = {}\n// + causal mask (future = -inf)",
                     config.d_model / config.num_heads
                 ),
-            });
-            sleep(state.get_delay()).await;
+            }).await;
 
             // Softmax -> attention weights
-            let mut weights: Vec<Vec<f32>> = scores.iter().map(|row| {
+            let weights: Vec<Vec<f32>> = scores.iter().map(|row| {
                 let max_val = row.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
                 let exp_vals: Vec<f32> = row.iter().map(|&x| {
                     if x == f32::NEG_INFINITY { 0.0 } else { (x - max_val).exp() }
@@ -326,55 +396,50 @@ async fn run_step_by_step(
                 exp_vals.iter().map(|&x| if sum > 0.0 { x / sum } else { 0.0 }).collect()
             }).collect();
 
-            let _ = state.tx.send(ExecutionStep::AttentionWeights {
+            send_step_with_pause(&state, ExecutionStep::AttentionWeights {
                 layer: layer_idx,
                 head: head_idx,
                 weights: weights.clone(),
                 tokens: token_chars.clone(),
                 code: "attn_weights = softmax(scores)\n// Each row sums to 1.0".to_string(),
-            });
-            sleep(state.get_delay()).await;
+            }).await;
         }
 
         // Attention output
         let output_sample: Vec<f32> = (0..8).map(|i| (i as f32 * 0.1 + layer_idx as f32).cos() * 0.5).collect();
-        let _ = state.tx.send(ExecutionStep::AttentionOutput {
+        send_step_with_pause(&state, ExecutionStep::AttentionOutput {
             layer: layer_idx,
             output_sample,
             code: "output = attn_weights @ V\noutput = concat(all_heads) @ W_o\nx = x + output  // Residual".to_string(),
-        });
-        sleep(state.get_delay()).await;
+        }).await;
 
         // Feed Forward
         let ffn_sample1: Vec<f32> = (0..8).map(|i| ((i + layer_idx) as f32 * 0.2).sin()).collect();
-        let _ = state.tx.send(ExecutionStep::FeedForward {
+        send_step_with_pause(&state, ExecutionStep::FeedForward {
             layer: layer_idx,
             stage: "linear1".to_string(),
             output_sample: ffn_sample1,
             code: format!("h = x @ W1 + b1\n// {} -> {}", config.d_model, config.d_ff),
-        });
-        sleep(state.get_delay()).await;
+        }).await;
 
         let ffn_sample2: Vec<f32> = (0..8).map(|i| {
             let x = ((i + layer_idx) as f32 * 0.2).sin();
             x * 0.5 * (1.0 + (x * 0.7978845608 * (1.0 + 0.044715 * x * x)).tanh())
         }).collect();
-        let _ = state.tx.send(ExecutionStep::FeedForward {
+        send_step_with_pause(&state, ExecutionStep::FeedForward {
             layer: layer_idx,
             stage: "gelu".to_string(),
             output_sample: ffn_sample2,
             code: "h = GELU(h)\n// Gaussian Error Linear Unit\n// GELU(x) = x * Φ(x)".to_string(),
-        });
-        sleep(state.get_delay()).await;
+        }).await;
 
         let ffn_sample3: Vec<f32> = (0..8).map(|i| ((i + layer_idx) as f32 * 0.15).cos() * 0.3).collect();
-        let _ = state.tx.send(ExecutionStep::FeedForward {
+        send_step_with_pause(&state, ExecutionStep::FeedForward {
             layer: layer_idx,
             stage: "linear2".to_string(),
             output_sample: ffn_sample3,
             code: format!("output = h @ W2 + b2\n// {} -> {}\nx = x + output  // Residual", config.d_ff, config.d_model),
-        });
-        sleep(state.get_delay()).await;
+        }).await;
     }
 
     // 5. 최종 Layer Norm 및 LM Head
@@ -406,12 +471,11 @@ async fn run_step_by_step(
 
     let logits_sample: Vec<f32> = (0..10).map(|v| logits[[0, seq_len - 1, v]]).collect();
 
-    let _ = state.tx.send(ExecutionStep::FinalLogits {
+    send_step_with_pause(&state, ExecutionStep::FinalLogits {
         logits_sample,
         top_tokens: top_tokens.clone(),
         code: "// Final Layer Norm\nx = layer_norm(x)\n\n// LM Head\nlogits = x @ W_lm + b_lm\n// Shape: (batch, seq, vocab_size)\n\n// Softmax for probabilities\nprobs = softmax(logits[-1])".to_string(),
-    });
-    sleep(state.get_delay()).await;
+    }).await;
 
     // 6. 텍스트 생성
     if generate_count > 0 {
@@ -458,22 +522,21 @@ async fn run_step_by_step(
             generated_tokens.push(max_idx);
             generated_text.push_str(&token_char);
 
-            let _ = state.tx.send(ExecutionStep::GeneratedToken {
+            send_step_with_pause(&state, ExecutionStep::GeneratedToken {
                 token_id: max_idx,
                 token_char,
                 probability: max_prob,
                 generated_text: generated_text.clone(),
-            });
-            sleep(state.get_delay()).await;
+            }).await;
         }
     }
 
     // 7. 완료
     let final_text = tokenizer.decode(&tokens);
-    let _ = state.tx.send(ExecutionStep::Complete {
+    send_step_with_pause(&state, ExecutionStep::Complete {
         total_steps: tokens.len() * (2 + config.num_layers * (config.num_heads + 3)) + generate_count,
         final_text,
-    });
+    }).await;
 }
 
 // ==================== 핸들러 ====================
@@ -505,14 +568,64 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
     let recv_task = tokio::spawn(async move {
         while let Some(Ok(msg)) = receiver.next().await {
             if let Message::Text(text) = msg {
-                if let Ok(req) = serde_json::from_str::<RunRequest>(&text) {
-                    let generate_count = req.generate_tokens.unwrap_or(0);
-                    let state_for_run = state_clone.clone();
-                    tokio::spawn(async move {
-                        run_step_by_step(state_for_run, req.text, generate_count).await;
-                    });
-                } else if let Ok(speed) = serde_json::from_str::<SpeedRequest>(&text) {
-                    state_clone.set_delay(speed.delay_ms);
+                if let Ok(client_msg) = serde_json::from_str::<ClientMessage>(&text) {
+                    match client_msg {
+                        ClientMessage::Run { text, generate_tokens } => {
+                            let generate_count = generate_tokens.unwrap_or(0);
+                            let state_for_run = state_clone.clone();
+                            // 초기화
+                            state_clone.set_paused(false);
+                            state_clone.set_current_step(0);
+                            {
+                                let mut cache = state_clone.steps_cache.lock().await;
+                                cache.clear();
+                            }
+                            tokio::spawn(async move {
+                                run_step_by_step(state_for_run, text, generate_count).await;
+                            });
+                        }
+                        ClientMessage::Speed { delay_ms } => {
+                            state_clone.set_delay(delay_ms);
+                        }
+                        ClientMessage::Control { command } => {
+                            match command.as_str() {
+                                "pause" => {
+                                    state_clone.set_paused(true);
+                                    let _ = state_clone.cmd_tx.send(ControlCommand::Pause).await;
+                                }
+                                "resume" => {
+                                    state_clone.set_paused(false);
+                                    let _ = state_clone.cmd_tx.send(ControlCommand::Resume).await;
+                                }
+                                "next" => {
+                                    let _ = state_clone.cmd_tx.send(ControlCommand::NextStep).await;
+                                }
+                                "prev" => {
+                                    // 이전 스텝: 캐시에서 가져와 다시 전송
+                                    let current = state_clone.get_current_step();
+                                    if current > 0 {
+                                        let cache = state_clone.steps_cache.lock().await;
+                                        let target = current.saturating_sub(1);
+                                        if target < cache.len() {
+                                            let step = cache[target].clone();
+                                            state_clone.set_current_step(target);
+                                            let _ = state_clone.tx.send(step);
+                                        }
+                                    }
+                                }
+                                "manual_on" => {
+                                    state_clone.set_manual_mode(true);
+                                    state_clone.set_paused(true);
+                                }
+                                "manual_off" => {
+                                    state_clone.set_manual_mode(false);
+                                    state_clone.set_paused(false);
+                                    let _ = state_clone.cmd_tx.send(ControlCommand::Resume).await;
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -535,21 +648,29 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
     }
 }
 
-async fn set_speed(
+async fn get_status(
     State(state): State<Arc<AppState>>,
-    Json(req): Json<SpeedRequest>,
 ) -> Json<StatusResponse> {
-    state.set_delay(req.delay_ms);
     Json(StatusResponse {
-        status: "ok".to_string(),
-        delay_ms: req.delay_ms,
+        status: if state.is_paused() { "paused".to_string() } else { "running".to_string() },
+        delay_ms: state.speed_ms.load(Ordering::Relaxed),
+        paused: state.is_paused(),
+        manual_mode: state.is_manual_mode(),
     })
 }
 
-async fn get_status(State(state): State<Arc<AppState>>) -> Json<StatusResponse> {
+async fn set_speed(
+    State(state): State<Arc<AppState>>,
+    Json(req): Json<serde_json::Value>,
+) -> Json<StatusResponse> {
+    if let Some(delay_ms) = req.get("delay_ms").and_then(|v| v.as_u64()) {
+        state.set_delay(delay_ms);
+    }
     Json(StatusResponse {
-        status: "ready".to_string(),
-        delay_ms: state.speed_ms.load(std::sync::atomic::Ordering::Relaxed),
+        status: if state.is_paused() { "paused".to_string() } else { "running".to_string() },
+        delay_ms: state.speed_ms.load(Ordering::Relaxed),
+        paused: state.is_paused(),
+        manual_mode: state.is_manual_mode(),
     })
 }
 
@@ -557,10 +678,16 @@ async fn get_status(State(state): State<Arc<AppState>>) -> Json<StatusResponse> 
 #[tokio::main]
 async fn main() {
     let (tx, _) = broadcast::channel::<ExecutionStep>(1000);
+    let (cmd_tx, _cmd_rx) = mpsc::channel::<ControlCommand>(100);
 
     let state = Arc::new(AppState {
         tx,
-        speed_ms: std::sync::atomic::AtomicU64::new(500), // 기본 500ms
+        speed_ms: AtomicU64::new(500), // 기본 500ms
+        paused: AtomicBool::new(false),
+        manual_mode: AtomicBool::new(false),
+        current_step: AtomicUsize::new(0),
+        cmd_tx,
+        steps_cache: Mutex::new(Vec::new()),
     });
 
     let app = Router::new()

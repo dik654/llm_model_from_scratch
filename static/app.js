@@ -1,6 +1,8 @@
 // ==================== State ====================
 let ws = null;
 let isRunning = false;
+let isPaused = false;
+let isManualMode = false;
 let totalSteps = 0;
 let currentStep = 0;
 let tokens = [];
@@ -346,6 +348,12 @@ function handleStart(step) {
 
     document.getElementById('btn-run').disabled = true;
     document.getElementById('btn-stop').disabled = false;
+    updateManualButtons(true);
+
+    // 수동 모드면 첫 스텝 후 자동 일시정지
+    if (isManualMode) {
+        updatePauseButton(true);
+    }
 }
 
 function handleTokenEmbedding(step) {
@@ -678,6 +686,8 @@ function handleComplete(step) {
 
     document.getElementById('btn-run').disabled = false;
     document.getElementById('btn-stop').disabled = true;
+    updateManualButtons(false);
+    updatePauseButton(false);
 }
 
 function handleError(step) {
@@ -963,6 +973,7 @@ function addLog(type, message) {
 function resetUI() {
     currentStep = 0;
     totalSteps = 0;
+    isPaused = false;
 
     document.getElementById('progress-fill').style.width = '0%';
     document.getElementById('progress-text').textContent = '0%';
@@ -975,6 +986,8 @@ function resetUI() {
 
     hideAllValueCards();
     clearAllHighlights();
+    updateManualButtons(false);
+    updatePauseButton(false);
 
     document.getElementById('q-matrix').textContent = '';
     document.getElementById('k-matrix').textContent = '';
@@ -1003,6 +1016,43 @@ function resetUI() {
 // 4. LM Head: 다음 토큰 예측`);
 }
 
+// ==================== Manual Control Functions ====================
+function setManualMode(enabled) {
+    isManualMode = enabled;
+
+    // Update button states
+    document.getElementById('mode-auto').classList.toggle('active', !enabled);
+    document.getElementById('mode-manual').classList.toggle('active', enabled);
+
+    // Show/hide manual controls
+    document.getElementById('manual-controls').style.display = enabled ? 'block' : 'none';
+
+    // Send to server
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ command: enabled ? 'manual_on' : 'manual_off' }));
+    }
+
+    addLog('control', enabled ? '수동 모드 활성화' : '자동 모드로 전환');
+}
+
+function sendControlCommand(command) {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ command: command }));
+    }
+}
+
+function updateManualButtons(enabled) {
+    document.getElementById('btn-prev').disabled = !enabled;
+    document.getElementById('btn-pause').disabled = !enabled;
+    document.getElementById('btn-next').disabled = !enabled;
+}
+
+function updatePauseButton(paused) {
+    const btn = document.getElementById('btn-pause');
+    btn.textContent = paused ? '▶ 재개' : '⏸ 일시정지';
+    isPaused = paused;
+}
+
 // ==================== Event Listeners ====================
 document.getElementById('btn-run').addEventListener('click', () => {
     if (!ws || ws.readyState !== WebSocket.OPEN) {
@@ -1019,6 +1069,7 @@ document.getElementById('btn-run').addEventListener('click', () => {
     const generateTokens = parseInt(document.getElementById('gen-count').value);
 
     resetUI();
+    updateManualButtons(true);
 
     ws.send(JSON.stringify({
         text: text,
@@ -1028,6 +1079,7 @@ document.getElementById('btn-run').addEventListener('click', () => {
 
 document.getElementById('btn-stop').addEventListener('click', () => {
     setStatus('중지 요청...');
+    updateManualButtons(false);
 });
 
 document.getElementById('btn-clear-log').addEventListener('click', () => {
@@ -1045,6 +1097,39 @@ document.getElementById('speed').addEventListener('input', (e) => {
     if (ws && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ delay_ms: parseInt(value) }));
     }
+});
+
+// Mode toggle
+document.getElementById('mode-auto').addEventListener('click', () => {
+    setManualMode(false);
+});
+
+document.getElementById('mode-manual').addEventListener('click', () => {
+    setManualMode(true);
+});
+
+// Manual control buttons
+document.getElementById('btn-prev').addEventListener('click', () => {
+    sendControlCommand('prev');
+    addLog('control', '이전 스텝으로 이동');
+});
+
+document.getElementById('btn-pause').addEventListener('click', () => {
+    if (isPaused) {
+        sendControlCommand('resume');
+        updatePauseButton(false);
+        addLog('control', '재개');
+    } else {
+        sendControlCommand('pause');
+        updatePauseButton(true);
+        addLog('control', '일시정지');
+    }
+});
+
+document.getElementById('btn-next').addEventListener('click', () => {
+    sendControlCommand('next');
+    sendControlCommand('resume');  // Resume to advance one step
+    addLog('control', '다음 스텝으로 이동');
 });
 
 // ==================== Init ====================
