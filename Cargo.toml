@@ -28,9 +28,10 @@ unicode-segmentation = "1.10"
 rayon = "1.10"
 
 # Web server for visualization
-axum = "0.7"
+axum = { version = "0.7", features = ["ws"] }
 tokio = { version = "1", features = ["full"] }
 tower-http = { version = "0.5", features = ["fs", "cors"] }
+futures = "0.3"
 
 [dev-dependencies]
 # For testing
