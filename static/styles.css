@@ -1,0 +1,462 @@
+/* ==================== 기본 스타일 ==================== */
+:root {
+    --bg-primary: #1a1b26;
+    --bg-secondary: #24283b;
+    --bg-tertiary: #414868;
+    --text-primary: #c0caf5;
+    --text-secondary: #9aa5ce;
+    --text-muted: #565f89;
+    --accent-blue: #7aa2f7;
+    --accent-purple: #bb9af7;
+    --accent-green: #9ece6a;
+    --accent-orange: #ff9e64;
+    --accent-red: #f7768e;
+    --accent-cyan: #7dcfff;
+    --border-color: #414868;
+    --shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+    --radius: 8px;
+    --radius-sm: 4px;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', 'Noto Sans KR', sans-serif;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    line-height: 1.6;
+}
+
+/* ==================== 앱 레이아웃 ==================== */
+.app-container {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+}
+
+.header {
+    background: var(--bg-secondary);
+    padding: 12px 24px;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.header h1 {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--accent-blue);
+}
+
+.header .subtitle {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
+.main-content {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+}
+
+/* ==================== 컨트롤 패널 ==================== */
+.control-panel {
+    width: 320px;
+    background: var(--bg-secondary);
+    border-right: 1px solid var(--border-color);
+    overflow-y: auto;
+    padding: 16px;
+}
+
+.control-section {
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.control-section:last-child {
+    border-bottom: none;
+}
+
+.control-section h2 {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--accent-purple);
+    margin-bottom: 12px;
+}
+
+.control-group {
+    margin-bottom: 12px;
+}
+
+.control-group label {
+    display: block;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin-bottom: 6px;
+}
+
+.control-group.inline {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.control-group.inline label {
+    margin-bottom: 0;
+}
+
+/* 입력 요소 */
+input[type="text"],
+input[type="number"],
+textarea,
+select {
+    width: 100%;
+    padding: 8px 12px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    font-size: 0.9rem;
+}
+
+input[type="text"]:focus,
+input[type="number"]:focus,
+textarea:focus,
+select:focus {
+    outline: none;
+    border-color: var(--accent-blue);
+}
+
+input[type="range"] {
+    width: 100%;
+    -webkit-appearance: none;
+    background: var(--bg-tertiary);
+    height: 6px;
+    border-radius: 3px;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 16px;
+    height: 16px;
+    background: var(--accent-blue);
+    border-radius: 50%;
+    cursor: pointer;
+}
+
+/* 버튼 */
+.btn {
+    padding: 8px 16px;
+    border: none;
+    border-radius: var(--radius-sm);
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+}
+
+.btn:hover {
+    background: var(--border-color);
+}
+
+.btn-primary {
+    background: var(--accent-blue);
+    color: var(--bg-primary);
+}
+
+.btn-primary:hover {
+    background: #5a8af7;
+}
+
+.btn-small {
+    padding: 4px 12px;
+    font-size: 0.8rem;
+}
+
+.btn-group {
+    display: flex;
+    gap: 8px;
+}
+
+.btn-group .btn {
+    flex: 1;
+}
+
+/* 정보 박스 */
+.info-box {
+    margin-top: 12px;
+    padding: 12px;
+    background: var(--bg-primary);
+    border-radius: var(--radius-sm);
+    font-size: 0.85rem;
+    font-family: 'Consolas', 'Monaco', monospace;
+    white-space: pre-wrap;
+    word-break: break-all;
+    max-height: 150px;
+    overflow-y: auto;
+}
+
+.info-box:empty {
+    display: none;
+}
+
+/* ==================== 시각화 패널 ==================== */
+.viz-panel {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.tab-nav {
+    display: flex;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border-color);
+    padding: 0 16px;
+}
+
+.tab-btn {
+    padding: 12px 20px;
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+    font-weight: 500;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s;
+}
+
+.tab-btn:hover {
+    color: var(--text-primary);
+}
+
+.tab-btn.active {
+    color: var(--accent-blue);
+    border-bottom-color: var(--accent-blue);
+}
+
+.tab-content {
+    flex: 1;
+    overflow: hidden;
+}
+
+.tab-pane {
+    display: none;
+    height: 100%;
+    padding: 20px;
+    overflow-y: auto;
+}
+
+.tab-pane.active {
+    display: flex;
+    flex-direction: column;
+}
+
+.viz-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+}
+
+.viz-header h3 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--accent-cyan);
+}
+
+.viz-description {
+    margin-top: 16px;
+    padding: 12px;
+    background: var(--bg-secondary);
+    border-radius: var(--radius);
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
+/* 차트 컨테이너 */
+.chart-container {
+    background: var(--bg-secondary);
+    border-radius: var(--radius);
+    padding: 16px;
+    min-height: 300px;
+    flex: 1;
+}
+
+.chart-container.half {
+    flex: 0 0 calc(50% - 8px);
+    min-height: 200px;
+}
+
+.chart-row {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 16px;
+}
+
+/* ==================== Architecture 다이어그램 ==================== */
+.architecture-diagram {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 20px;
+    gap: 8px;
+}
+
+.arch-layer {
+    width: 100%;
+    max-width: 400px;
+}
+
+.arch-arrow {
+    color: var(--text-muted);
+    font-size: 1.5rem;
+}
+
+.layer-box {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    padding: 12px 20px;
+    text-align: center;
+    font-weight: 500;
+}
+
+.layer-info {
+    text-align: center;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin-top: 4px;
+}
+
+.arch-layer.input .layer-box {
+    background: var(--accent-green);
+    color: var(--bg-primary);
+    border-color: var(--accent-green);
+}
+
+.arch-layer.output .layer-box {
+    background: var(--accent-orange);
+    color: var(--bg-primary);
+    border-color: var(--accent-orange);
+}
+
+.arch-layer.embeddings .layer-box {
+    background: var(--accent-purple);
+    color: var(--bg-primary);
+    border-color: var(--accent-purple);
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+}
+
+.arch-layer.embeddings .plus {
+    color: rgba(0,0,0,0.5);
+}
+
+.arch-layer.transformer-block .layer-box {
+    background: var(--bg-secondary);
+    border: 2px solid var(--accent-blue);
+    padding: 16px;
+}
+
+.block-title {
+    color: var(--accent-blue);
+    font-weight: 600;
+    margin-bottom: 12px;
+}
+
+.block-content {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.sub-layer {
+    background: var(--bg-tertiary);
+    padding: 8px 12px;
+    border-radius: var(--radius-sm);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.sub-name {
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.sub-detail {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+/* ==================== 상태바 ==================== */
+.status-bar {
+    background: var(--bg-secondary);
+    border-top: 1px solid var(--border-color);
+    padding: 8px 16px;
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+#status-text {
+    color: var(--accent-green);
+}
+
+/* ==================== 스크롤바 ==================== */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--bg-primary);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--bg-tertiary);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--border-color);
+}
+
+/* ==================== 반응형 ==================== */
+@media (max-width: 1024px) {
+    .control-panel {
+        width: 280px;
+    }
+}
+
+@media (max-width: 768px) {
+    .main-content {
+        flex-direction: column;
+    }
+
+    .control-panel {
+        width: 100%;
+        max-height: 40vh;
+    }
+
+    .chart-row {
+        flex-direction: column;
+    }
+
+    .chart-container.half {
+        flex: none;
+    }
+}

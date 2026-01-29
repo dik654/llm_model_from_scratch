@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LLM Visualizer</title>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- 헤더 -->
+        <header class="header">
+            <h1>🧠 LLM Visualizer</h1>
+            <p class="subtitle">Educational Deep Learning Visualization</p>
+        </header>
+
+        <!-- 메인 컨텐츠 -->
+        <main class="main-content">
+            <!-- 왼쪽 패널: 컨트롤 -->
+            <aside class="control-panel">
+                <section class="control-section">
+                    <h2>📦 모델 설정</h2>
+                    <div class="control-group">
+                        <label>모델 크기</label>
+                        <select id="model-size">
+                            <option value="mini" selected>Mini (133K params)</option>
+                            <option value="small">Small (10M params)</option>
+                            <option value="medium">Medium (85M params)</option>
+                        </select>
+                    </div>
+                    <button id="btn-create-model" class="btn btn-primary">모델 생성</button>
+                    <div id="model-info" class="info-box"></div>
+                </section>
+
+                <section class="control-section">
+                    <h2>📝 입력</h2>
+                    <div class="control-group">
+                        <label>텍스트 입력</label>
+                        <textarea id="input-text" rows="3" placeholder="Hello, world!">Hello</textarea>
+                    </div>
+                    <div class="btn-group">
+                        <button id="btn-tokenize" class="btn">토큰화</button>
+                        <button id="btn-forward" class="btn">순전파</button>
+                    </div>
+                    <div id="token-info" class="info-box"></div>
+                </section>
+
+                <section class="control-section">
+                    <h2>✨ 텍스트 생성</h2>
+                    <div class="control-group">
+                        <label>프롬프트</label>
+                        <input type="text" id="gen-prompt" value="The " placeholder="시작 텍스트">
+                    </div>
+                    <div class="control-group">
+                        <label>생성 길이: <span id="gen-length-value">20</span></label>
+                        <input type="range" id="gen-length" min="5" max="50" value="20">
+                    </div>
+                    <div class="control-group">
+                        <label>Temperature: <span id="temp-value">1.0</span></label>
+                        <input type="range" id="temperature" min="0.1" max="2.0" step="0.1" value="1.0">
+                    </div>
+                    <button id="btn-generate" class="btn btn-primary">생성</button>
+                    <div id="generation-result" class="info-box"></div>
+                </section>
+
+                <section class="control-section">
+                    <h2>📈 학습 시뮬레이션</h2>
+                    <div class="control-group">
+                        <label>스텝 수: <span id="train-steps-value">100</span></label>
+                        <input type="range" id="train-steps" min="50" max="500" step="50" value="100">
+                    </div>
+                    <button id="btn-train" class="btn btn-primary">학습 시작</button>
+                </section>
+            </aside>
+
+            <!-- 오른쪽 패널: 시각화 -->
+            <div class="viz-panel">
+                <!-- 탭 네비게이션 -->
+                <nav class="tab-nav">
+                    <button class="tab-btn active" data-tab="attention">Attention</button>
+                    <button class="tab-btn" data-tab="training">Training</button>
+                    <button class="tab-btn" data-tab="embedding">Embedding</button>
+                    <button class="tab-btn" data-tab="architecture">Architecture</button>
+                </nav>
+
+                <!-- 탭 컨텐츠 -->
+                <div class="tab-content">
+                    <!-- Attention 시각화 -->
+                    <div id="tab-attention" class="tab-pane active">
+                        <div class="viz-header">
+                            <h3>🔍 Attention Weights</h3>
+                            <div class="control-group inline">
+                                <label>Head:</label>
+                                <select id="attention-head">
+                                    <option value="0">Head 0</option>
+                                    <option value="1">Head 1</option>
+                                    <option value="2">Head 2</option>
+                                    <option value="3">Head 3</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div id="attention-heatmap" class="chart-container"></div>
+                        <div class="viz-description">
+                            <p>각 토큰이 다른 토큰에 얼마나 "주의"를 기울이는지 보여줍니다.
+                            밝은 색일수록 높은 attention 가중치를 의미합니다.</p>
+                        </div>
+                    </div>
+
+                    <!-- Training 시각화 -->
+                    <div id="tab-training" class="tab-pane">
+                        <div class="viz-header">
+                            <h3>📊 Training Progress</h3>
+                        </div>
+                        <div class="chart-row">
+                            <div id="loss-chart" class="chart-container half"></div>
+                            <div id="lr-chart" class="chart-container half"></div>
+                        </div>
+                        <div id="perplexity-chart" class="chart-container"></div>
+                    </div>
+
+                    <!-- Embedding 시각화 -->
+                    <div id="tab-embedding" class="tab-pane">
+                        <div class="viz-header">
+                            <h3>🌊 Positional Encoding</h3>
+                            <div class="control-group inline">
+                                <label>시퀀스 길이:</label>
+                                <input type="number" id="pos-length" value="50" min="10" max="128">
+                                <button id="btn-pos-enc" class="btn btn-small">업데이트</button>
+                            </div>
+                        </div>
+                        <div id="pos-encoding-chart" class="chart-container"></div>
+                        <div class="viz-description">
+                            <p>Sinusoidal Positional Encoding: 각 위치에 고유한 패턴을 부여하여
+                            모델이 토큰의 순서를 인식할 수 있게 합니다.</p>
+                        </div>
+                    </div>
+
+                    <!-- Architecture 시각화 -->
+                    <div id="tab-architecture" class="tab-pane">
+                        <div class="viz-header">
+                            <h3>🏗️ Transformer Architecture</h3>
+                        </div>
+                        <div class="architecture-diagram">
+                            <div class="arch-layer output">
+                                <div class="layer-box">Output Logits</div>
+                                <div class="layer-info">Shape: (batch, seq, vocab_size)</div>
+                            </div>
+                            <div class="arch-arrow">↑</div>
+                            <div class="arch-layer">
+                                <div class="layer-box">LM Head (Linear)</div>
+                                <div class="layer-info">d_model → vocab_size</div>
+                            </div>
+                            <div class="arch-arrow">↑</div>
+                            <div class="arch-layer">
+                                <div class="layer-box">Layer Norm</div>
+                            </div>
+                            <div class="arch-arrow">↑</div>
+                            <div class="arch-layer transformer-block">
+                                <div class="layer-box">
+                                    <div class="block-title">Transformer Block × N</div>
+                                    <div class="block-content">
+                                        <div class="sub-layer">
+                                            <span class="sub-name">Multi-Head Attention</span>
+                                            <span class="sub-detail">Q, K, V → Scaled Dot-Product</span>
+                                        </div>
+                                        <div class="sub-layer">
+                                            <span class="sub-name">Add & Norm</span>
+                                        </div>
+                                        <div class="sub-layer">
+                                            <span class="sub-name">Feed Forward</span>
+                                            <span class="sub-detail">Linear → GELU → Linear</span>
+                                        </div>
+                                        <div class="sub-layer">
+                                            <span class="sub-name">Add & Norm</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="arch-arrow">↑</div>
+                            <div class="arch-layer">
+                                <div class="layer-box">Dropout</div>
+                            </div>
+                            <div class="arch-arrow">↑</div>
+                            <div class="arch-layer embeddings">
+                                <div class="layer-box">
+                                    <span>Token Embedding</span>
+                                    <span class="plus">+</span>
+                                    <span>Position Encoding</span>
+                                </div>
+                            </div>
+                            <div class="arch-arrow">↑</div>
+                            <div class="arch-layer input">
+                                <div class="layer-box">Input Token IDs</div>
+                                <div class="layer-info">Shape: (batch, seq_len)</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- 상태바 -->
+        <footer class="status-bar">
+            <span id="status-text">Ready</span>
+            <span id="status-time"></span>
+        </footer>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

@@ -27,6 +27,11 @@ unicode-segmentation = "1.10"
 # Parallel computation (optional, for performance)
 rayon = "1.10"
 
+# Web server for visualization
+axum = "0.7"
+tokio = { version = "1", features = ["full"] }
+tower-http = { version = "0.5", features = ["fs", "cors"] }
+
 [dev-dependencies]
 # For testing
 approx = "0.5"
@@ -42,6 +47,10 @@ path = "examples/train.rs"
 [[example]]
 name = "visualize"
 path = "examples/visualize.rs"
+
+[[bin]]
+name = "llm-viz"
+path = "src/bin/visualizer.rs"
 
 [profile.release]
 opt-level = 3
