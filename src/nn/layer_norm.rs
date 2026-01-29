@@ -33,7 +33,7 @@ use super::Module;
 /// Layer Normalization
 ///
 /// # 예시
-/// ```
+/// ```ignore
 /// let ln = LayerNorm::new(768);
 /// let x = randn_3d(32, 10, 768);  // (batch, seq, dim)
 /// let y = ln.forward(&x);         // 정규화된 (batch, seq, dim)

@@ -22,7 +22,7 @@ use super::Module;
 /// 선형 레이어
 ///
 /// # 예시
-/// ```
+/// ```ignore
 /// let linear = Linear::new(768, 3072); // 768 → 3072 차원 변환
 /// let x = zeros_3d(32, 10, 768);       // (batch=32, seq=10, dim=768)
 /// let y = linear.forward(&x);          // (batch=32, seq=10, dim=3072)

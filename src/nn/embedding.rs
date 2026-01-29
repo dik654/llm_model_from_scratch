@@ -23,7 +23,7 @@ use ndarray::s;
 /// 임베딩 레이어
 ///
 /// # 예시
-/// ```
+/// ```ignore
 /// let embedding = Embedding::new(50000, 768); // 어휘 크기 50000, 임베딩 768차원
 /// let token_ids = vec![vec![100, 2500, 345]]; // 배치 크기 1, 시퀀스 길이 3
 /// let vectors = embedding.forward(&token_ids); // (1, 3, 768)

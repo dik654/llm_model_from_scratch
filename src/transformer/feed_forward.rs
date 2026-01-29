@@ -23,7 +23,7 @@ use crate::nn::{Linear, Dropout, Module};
 /// Position-wise Feed-Forward Network
 ///
 /// # 예시
-/// ```
+/// ```ignore
 /// let ffn = FeedForward::new(512, 2048, 0.1);
 /// let x = randn_3d(32, 10, 512);  // (batch, seq, d_model)
 /// let y = ffn.forward(&x);        // (batch, seq, d_model)

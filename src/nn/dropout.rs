@@ -33,7 +33,7 @@ use super::Module;
 /// Dropout 레이어
 ///
 /// # 예시
-/// ```
+/// ```ignore
 /// let dropout = Dropout::new(0.1);  // 10% 확률로 비활성화
 /// dropout.set_training(true);       // 학습 모드
 /// let y = dropout.forward(&x);      // 일부 값이 0이 됨

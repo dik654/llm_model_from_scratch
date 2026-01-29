@@ -52,7 +52,7 @@ use super::{CausalSelfAttention, FeedForward};
 /// Transformer Block (Pre-LN)
 ///
 /// # 예시
-/// ```
+/// ```ignore
 /// let block = TransformerBlock::new(512, 8, 2048, 256, 0.1);
 /// let x = randn_3d(32, 10, 512);  // (batch, seq, d_model)
 /// let y = block.forward(&x);      // (batch, seq, d_model)

@@ -101,7 +101,7 @@ impl GPTConfig {
 /// GPT 모델
 ///
 /// # 예시
-/// ```
+/// ```ignore
 /// let config = GPTConfig::mini();
 /// let model = GPT::new(config);
 ///

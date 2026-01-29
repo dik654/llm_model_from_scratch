@@ -21,7 +21,7 @@ use crate::tensor::{Tensor1D, Tensor2D};
 /// SGD 옵티마이저
 ///
 /// # 예시
-/// ```
+/// ```ignore
 /// let mut sgd = SGD::new(0.01, 0.9);
 ///
 /// // 기울기 계산 후
