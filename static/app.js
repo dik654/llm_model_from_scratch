@@ -23,15 +23,29 @@ const EXPLANATIONS = {
 
     tokenEmbedding: {
         title: "📊 토큰 임베딩 (Token Embedding)",
-        text: `토큰 ID를 고차원 벡터로 변환합니다.
+        text: `토큰 ID(숫자)를 의미를 담은 벡터로 변환합니다.
 
-• 왜 필요한가?: 단순한 숫자(72)는 의미 정보가 없습니다.
-  임베딩은 각 토큰을 수백 개의 숫자로 된 벡터로 표현해서 의미를 담습니다.
+■ 임베딩 테이블이란?
+  - 거대한 2D 행렬 (vocab_size × d_model)
+  - 예: 256개 토큰 × 64차원 = 16,384개의 학습 가능한 숫자
+  - 각 행이 하나의 토큰을 표현하는 벡터
 
-• 작동 방식: 거대한 룩업 테이블에서 토큰 ID에 해당하는 행을 가져옵니다.
-  예: token_id=72 → embedding[72] = [0.12, -0.34, 0.56, ...]
+■ 룩업(Lookup) 과정:
+  token_id = 72 (문자 'H')
+       ↓
+  embedding_table[72] 행을 가져옴
+       ↓
+  [0.12, -0.34, 0.56, ...] (64개 숫자)
 
-• 임베딩 벡터의 각 숫자는 학습을 통해 의미 있는 특징을 갖게 됩니다.`
+■ 왜 이런 방식을 쓰나요?
+  - 원-핫 인코딩은 너무 sparse (256차원 중 1개만 1)
+  - 임베딩은 dense하고 의미를 압축해서 담음
+  - 비슷한 의미의 토큰은 비슷한 벡터를 가짐
+
+■ 학습 과정:
+  1. 처음엔 랜덤 값으로 초기화
+  2. 모델이 틀릴 때마다 역전파로 값 조정
+  3. 수백만 번 학습 후 의미 있는 패턴 형성`
     },
 
     positionEncoding: {
@@ -365,19 +379,41 @@ function handleTokenEmbedding(step) {
 
     setStepInfo('Token Embedding', `토큰 ${step.step}: "${step.token_char}" (ID: ${step.token_id})`);
     setExplanation(EXPLANATIONS.tokenEmbedding);
-    setCode(`// 토큰 임베딩
-// "${step.token_char}" (ID: ${step.token_id})를 벡터로 변환
 
-embedding = embedding_table[${step.token_id}]
-// 결과: ${step.embedding_sample.length}차원 벡터
+    // 임베딩 테이블 시각화를 위한 코드
+    const d_model = 64;  // 모델 차원
+    const vocab_size = 256;  // 어휘 크기
 
-// 이 벡터의 각 숫자는 해당 토큰의 "의미"를 표현합니다.
-// 비슷한 의미의 단어는 비슷한 벡터를 가집니다.`);
+    setCode(`// ═══════════════════════════════════════════════════════
+// 토큰 임베딩: "${step.token_char}" (ID: ${step.token_id})
+// ═══════════════════════════════════════════════════════
+
+// 1단계: 임베딩 테이블 구조
+// ┌─────────────────────────────────────────────────────┐
+// │  embedding_table: (${vocab_size} × ${d_model}) 행렬       │
+// │                                                     │
+// │  행 0:   [0.12, -0.05, 0.33, ...]  ← 토큰 0의 벡터  │
+// │  행 1:   [0.08,  0.21, -0.14, ...] ← 토큰 1의 벡터  │
+// │  ...                                                │
+// │  행 ${step.token_id}:  [${step.embedding_sample.slice(0,3).map(v => v.toFixed(2)).join(', ')}, ...] ← 현재 토큰! │
+// │  ...                                                │
+// │  행 255: [-0.09, 0.17, 0.28, ...] ← 토큰 255의 벡터 │
+// └─────────────────────────────────────────────────────┘
+
+// 2단계: 룩업 (Lookup) - 그냥 해당 행을 가져오는 것!
+vector = embedding_table[${step.token_id}]  // ${step.token_id}번째 행
+
+// 결과: ${d_model}개의 숫자로 된 벡터
+// [${step.embedding_sample.map(v => v.toFixed(3)).join(', ')}...]
+
+// 💡 이 숫자들은 처음엔 랜덤이지만,
+//    학습을 거치면서 의미 있는 패턴을 갖게 됩니다.`);
 
     showValueCard('embed-value-card', 'embed-value',
-        `[${step.embedding_sample.map(v => v.toFixed(3)).join(', ')}...]`);
+        `임베딩 테이블[${step.token_id}] =\n[${step.embedding_sample.map(v => v.toFixed(3)).join(', ')}...]`);
 
-    showTensorViz('임베딩 벡터', `토큰 "${step.token_char}" → ${step.embedding_sample.length}차원`, step.embedding_sample);
+    // 임베딩 테이블 룩업 시각화
+    showEmbeddingLookup(step.token_id, step.embedding_sample);
 
     addLog('embed', `"${step.token_char}" → 임베딩[${step.token_id}]`);
 }
@@ -828,6 +864,45 @@ function showTensorViz(label, shape, values) {
         cell.style.color = intensity > 50 ? 'white' : 'var(--text-primary)';
         grid.appendChild(cell);
     });
+}
+
+// ==================== Embedding Lookup Visualization ====================
+function showEmbeddingLookup(tokenId, embedding) {
+    const container = document.getElementById('tensor-viz');
+    document.getElementById('tensor-label').textContent = '임베딩 테이블 룩업';
+    document.getElementById('tensor-shape').textContent = `token_id=${tokenId} → 64차원 벡터`;
+
+    const grid = document.getElementById('tensor-grid');
+    grid.innerHTML = '';
+
+    // 임베딩 테이블 미니 시각화
+    const tableDiv = document.createElement('div');
+    tableDiv.className = 'embedding-table-viz';
+    tableDiv.innerHTML = `
+        <div class="embed-table-header">Embedding Table (256 × 64)</div>
+        <div class="embed-table-rows">
+            ${tokenId > 0 ? `<div class="embed-row other">행 ${tokenId-1}: [?, ?, ?, ...]</div>` : ''}
+            <div class="embed-row current">
+                <span class="row-indicator">→</span>
+                <span class="row-label">행 ${tokenId}:</span>
+                <span class="row-values">[${embedding.slice(0, 4).map(v => v.toFixed(2)).join(', ')}, ...]</span>
+            </div>
+            ${tokenId < 255 ? `<div class="embed-row other">행 ${tokenId+1}: [?, ?, ?, ...]</div>` : ''}
+        </div>
+        <div class="embed-arrow">↓ 복사</div>
+        <div class="embed-result">
+            <div class="result-label">결과 벡터:</div>
+            <div class="result-values">
+                ${embedding.slice(0, 8).map((v, i) => {
+                    const intensity = Math.min(Math.abs(v) * 100, 100);
+                    const hue = v >= 0 ? 200 : 0;
+                    return `<span class="embed-cell" style="background: hsla(${hue}, 70%, 50%, ${intensity / 100})">${v.toFixed(2)}</span>`;
+                }).join('')}
+                <span class="embed-more">...</span>
+            </div>
+        </div>
+    `;
+    grid.appendChild(tableDiv);
 }
 
 // ==================== Matrix Operation ====================
