@@ -1,0 +1,20 @@
+[package]
+name = "llm-visualizer"
+version = "0.1.0"
+edition = "2021"
+description = "LLM Visualization App"
+
+[build-dependencies]
+tauri-build = { version = "1.5", features = [] }
+
+[dependencies]
+tauri = { version = "1.6", features = ["shell-open"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# LLM 라이브러리 참조
+llm_from_scratch = { path = "../.." }
+
+[features]
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]
