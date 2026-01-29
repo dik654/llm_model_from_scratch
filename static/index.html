@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LLM Visualizer - Real-time Execution</title>
+    <title>LLM Visualizer - Transformer Architecture</title>
     <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
     <link rel="stylesheet" href="styles.css">
 </head>
@@ -11,8 +11,8 @@
     <div class="app-container">
         <!-- 헤더 -->
         <header class="header">
-            <h1>🧠 LLM Visualizer</h1>
-            <p class="subtitle">Real-time Step-by-Step Execution</p>
+            <h1>Transformer Visualizer</h1>
+            <p class="subtitle">Step-by-Step Execution | "Attention Is All You Need"</p>
             <div class="connection-status" id="connection-status">
                 <span class="status-dot disconnected"></span>
                 <span>Disconnected</span>
@@ -21,129 +21,256 @@
 
         <!-- 메인 컨텐츠 -->
         <main class="main-content">
-            <!-- 왼쪽: 코드 실행 패널 -->
-            <div class="code-panel">
-                <div class="panel-header">
-                    <h2>📝 Code Execution</h2>
-                </div>
-
-                <!-- 입력 영역 -->
-                <div class="input-section">
-                    <div class="control-group">
-                        <label>입력 텍스트</label>
-                        <input type="text" id="input-text" value="Hello" placeholder="텍스트 입력...">
-                    </div>
-                    <div class="control-group">
-                        <label>생성할 토큰 수: <span id="gen-count-value">5</span></label>
+            <!-- 왼쪽: 컨트롤 + 아키텍처 -->
+            <div class="left-panel">
+                <!-- 입력 컨트롤 -->
+                <div class="control-section">
+                    <h3>Input</h3>
+                    <input type="text" id="input-text" value="Hello" placeholder="텍스트 입력...">
+                    <div class="control-row">
+                        <label>Generate: <span id="gen-count-value">5</span> tokens</label>
                         <input type="range" id="gen-count" min="0" max="20" value="5">
                     </div>
-                    <div class="control-group">
-                        <label>실행 속도: <span id="speed-value">500</span>ms</label>
+                    <div class="control-row">
+                        <label>Speed: <span id="speed-value">500</span>ms</label>
                         <input type="range" id="speed" min="100" max="2000" step="100" value="500">
                     </div>
                     <div class="btn-group">
-                        <button id="btn-run" class="btn btn-primary">▶ 실행</button>
-                        <button id="btn-stop" class="btn btn-danger" disabled>⏹ 중지</button>
+                        <button id="btn-run" class="btn btn-primary">Run</button>
+                        <button id="btn-stop" class="btn btn-danger" disabled>Stop</button>
                     </div>
                 </div>
 
-                <!-- 코드 표시 영역 -->
-                <div class="code-display">
-                    <div class="code-header">
-                        <span class="step-indicator" id="step-indicator">Ready</span>
-                    </div>
-                    <pre id="code-block"><code>// LLM 실행 과정이 여기에 표시됩니다
-// "실행" 버튼을 클릭하세요
+                <!-- Transformer 아키텍처 다이어그램 -->
+                <div class="architecture-section">
+                    <h3>Transformer Architecture</h3>
+                    <div class="arch-diagram">
+                        <!-- Output -->
+                        <div class="arch-block output-block" id="arch-output">
+                            <div class="block-label">Output Probabilities</div>
+                            <div class="block-content">Softmax</div>
+                        </div>
+                        <div class="arch-arrow">↑</div>
 
-// Forward Pass 순서:
-// 1. Token Embedding
-// 2. Position Encoding
-// 3. Transformer Blocks (x N)
-//    - Layer Norm
-//    - Multi-Head Attention
-//    - Feed Forward Network
-// 4. Final Layer Norm
-// 5. LM Head → Logits</code></pre>
-                </div>
+                        <!-- LM Head -->
+                        <div class="arch-block lm-head-block" id="arch-lm-head">
+                            <div class="block-label">LM Head</div>
+                            <div class="block-content">Linear</div>
+                        </div>
+                        <div class="arch-arrow">↑</div>
 
-                <!-- 실행 로그 -->
-                <div class="execution-log">
-                    <div class="log-header">
-                        <h3>📋 Execution Log</h3>
-                        <button id="btn-clear-log" class="btn btn-small">Clear</button>
+                        <!-- Transformer Block (Nx) -->
+                        <div class="transformer-block-container" id="transformer-blocks">
+                            <div class="block-repeat-label">× N</div>
+
+                            <!-- Feed Forward -->
+                            <div class="arch-block ffn-block" id="arch-ffn">
+                                <div class="block-label">Feed Forward</div>
+                                <div class="ffn-detail">
+                                    <span class="ffn-step" id="ffn-linear1">Linear</span>
+                                    <span class="ffn-arrow">→</span>
+                                    <span class="ffn-step" id="ffn-gelu">GELU</span>
+                                    <span class="ffn-arrow">→</span>
+                                    <span class="ffn-step" id="ffn-linear2">Linear</span>
+                                </div>
+                            </div>
+                            <div class="residual-connection right">
+                                <div class="residual-label">+ Residual</div>
+                            </div>
+                            <div class="arch-arrow">↑</div>
+
+                            <div class="arch-block layernorm-block" id="arch-ln2">
+                                <div class="block-content">Layer Norm</div>
+                            </div>
+                            <div class="arch-arrow">↑</div>
+
+                            <!-- Multi-Head Attention -->
+                            <div class="arch-block attention-block" id="arch-attention">
+                                <div class="block-label">Multi-Head Attention</div>
+                                <div class="attention-detail" id="attention-detail">
+                                    <!-- Q, K, V 블록들 -->
+                                    <div class="qkv-container">
+                                        <div class="qkv-block q-block" id="q-block">
+                                            <div class="qkv-label">Q</div>
+                                            <div class="qkv-matrix" id="q-matrix"></div>
+                                        </div>
+                                        <div class="qkv-block k-block" id="k-block">
+                                            <div class="qkv-label">K</div>
+                                            <div class="qkv-matrix" id="k-matrix"></div>
+                                        </div>
+                                        <div class="qkv-block v-block" id="v-block">
+                                            <div class="qkv-label">V</div>
+                                            <div class="qkv-matrix" id="v-matrix"></div>
+                                        </div>
+                                    </div>
+                                    <!-- Attention 연산 -->
+                                    <div class="attention-formula" id="attention-formula">
+                                        <span class="formula-part" id="formula-qk">Q × K<sup>T</sup></span>
+                                        <span class="formula-arrow">→</span>
+                                        <span class="formula-part" id="formula-scale">/ √d<sub>k</sub></span>
+                                        <span class="formula-arrow">→</span>
+                                        <span class="formula-part" id="formula-mask">+ Mask</span>
+                                        <span class="formula-arrow">→</span>
+                                        <span class="formula-part" id="formula-softmax">Softmax</span>
+                                        <span class="formula-arrow">→</span>
+                                        <span class="formula-part" id="formula-v">× V</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="residual-connection left">
+                                <div class="residual-label">+ Residual</div>
+                            </div>
+                            <div class="arch-arrow">↑</div>
+
+                            <div class="arch-block layernorm-block" id="arch-ln1">
+                                <div class="block-content">Layer Norm</div>
+                            </div>
+                        </div>
+                        <div class="arch-arrow">↑</div>
+
+                        <!-- Positional Encoding -->
+                        <div class="arch-block pos-block" id="arch-pos">
+                            <div class="block-label">+ Positional Encoding</div>
+                            <div class="pos-formula">PE(pos, 2i) = sin(pos/10000<sup>2i/d</sup>)</div>
+                        </div>
+                        <div class="arch-arrow">↑</div>
+
+                        <!-- Token Embedding -->
+                        <div class="arch-block embed-block" id="arch-embed">
+                            <div class="block-label">Token Embedding</div>
+                            <div class="block-content">lookup(token_id)</div>
+                        </div>
+                        <div class="arch-arrow">↑</div>
+
+                        <!-- Input -->
+                        <div class="arch-block input-block" id="arch-input">
+                            <div class="block-label">Input Tokens</div>
+                            <div class="input-tokens" id="input-tokens"></div>
+                        </div>
                     </div>
-                    <div id="log-container" class="log-container"></div>
                 </div>
             </div>
 
-            <!-- 오른쪽: 시각화 패널 -->
-            <div class="viz-panel">
-                <div class="panel-header">
-                    <h2>🔍 Visualization</h2>
-                </div>
-
-                <!-- 현재 단계 표시 -->
-                <div class="current-stage" id="current-stage">
-                    <div class="stage-icon">🚀</div>
-                    <div class="stage-info">
-                        <div class="stage-name" id="stage-name">Ready</div>
-                        <div class="stage-detail" id="stage-detail">실행 버튼을 클릭하면 시작합니다</div>
+            <!-- 가운데: 데이터 흐름 시각화 -->
+            <div class="center-panel">
+                <div class="current-step-display">
+                    <div class="step-header">
+                        <span class="step-number" id="step-number">Step 0</span>
+                        <span class="step-name" id="step-name">Ready</span>
+                    </div>
+                    <div class="step-description" id="step-description">
+                        Press "Run" to start the visualization
                     </div>
                 </div>
 
-                <!-- 진행 상황 -->
+                <!-- 진행 바 -->
                 <div class="progress-section">
                     <div class="progress-bar">
-                        <div class="progress-fill" id="progress-fill" style="width: 0%"></div>
+                        <div class="progress-fill" id="progress-fill"></div>
                     </div>
-                    <div class="progress-text" id="progress-text">0%</div>
+                    <span class="progress-text" id="progress-text">0%</span>
                 </div>
 
-                <!-- 토큰 표시 -->
-                <div class="token-display" id="token-display">
-                    <div class="token-label">Tokens:</div>
-                    <div class="token-list" id="token-list"></div>
+                <!-- 데이터 흐름 시각화 -->
+                <div class="data-flow-section">
+                    <h3>Data Flow</h3>
+
+                    <!-- 텐서 시각화 -->
+                    <div class="tensor-viz" id="tensor-viz">
+                        <div class="tensor-label" id="tensor-label">Tensor</div>
+                        <div class="tensor-shape" id="tensor-shape">Shape: -</div>
+                        <div class="tensor-grid" id="tensor-grid"></div>
+                    </div>
+
+                    <!-- Attention 행렬 연산 시각화 -->
+                    <div class="matrix-operation" id="matrix-operation" style="display: none;">
+                        <div class="matrix-container">
+                            <div class="matrix-box" id="matrix-a">
+                                <div class="matrix-title">Q</div>
+                                <div class="matrix-grid" id="matrix-a-grid"></div>
+                            </div>
+                            <div class="matrix-op" id="matrix-op-symbol">×</div>
+                            <div class="matrix-box" id="matrix-b">
+                                <div class="matrix-title">K<sup>T</sup></div>
+                                <div class="matrix-grid" id="matrix-b-grid"></div>
+                            </div>
+                            <div class="matrix-op">=</div>
+                            <div class="matrix-box" id="matrix-result">
+                                <div class="matrix-title">Scores</div>
+                                <div class="matrix-grid" id="matrix-result-grid"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Attention Heatmap -->
+                    <div class="attention-heatmap-section" id="attention-heatmap-section" style="display: none;">
+                        <h4>Attention Weights <span id="attn-layer-head">Layer 0, Head 0</span></h4>
+                        <div id="attention-heatmap" class="heatmap-container"></div>
+                    </div>
+                </div>
+
+                <!-- 코드 표시 -->
+                <div class="code-section">
+                    <h3>Execution Code</h3>
+                    <pre id="code-display"><code id="code-content">// Transformer forward pass
+// Click "Run" to start</code></pre>
+                </div>
+            </div>
+
+            <!-- 오른쪽: 출력 및 로그 -->
+            <div class="right-panel">
+                <!-- 토큰 시퀀스 -->
+                <div class="token-sequence-section">
+                    <h3>Token Sequence</h3>
+                    <div class="token-sequence" id="token-sequence"></div>
                 </div>
 
                 <!-- 생성된 텍스트 -->
-                <div class="generated-section" id="generated-section" style="display: none;">
-                    <div class="generated-label">Generated Text:</div>
+                <div class="generation-section" id="generation-section" style="display: none;">
+                    <h3>Generated Text</h3>
                     <div class="generated-text" id="generated-text"></div>
                 </div>
 
-                <!-- Attention 히트맵 -->
-                <div class="viz-section" id="attention-section" style="display: none;">
-                    <div class="viz-header">
-                        <h3>Attention Weights</h3>
-                        <span class="viz-info" id="attention-info">Layer 0, Head 0</span>
-                    </div>
-                    <div id="attention-chart" class="chart-container small"></div>
-                </div>
-
-                <!-- 값 표시 -->
-                <div class="values-section">
-                    <div class="values-grid">
-                        <div class="value-card" id="embedding-card" style="display: none;">
-                            <div class="value-title">Embedding</div>
-                            <div class="value-data" id="embedding-values"></div>
-                        </div>
-                        <div class="value-card" id="qkv-card" style="display: none;">
-                            <div class="value-title">Q / K / V</div>
-                            <div class="value-data" id="qkv-values"></div>
-                        </div>
-                        <div class="value-card" id="output-card" style="display: none;">
-                            <div class="value-title">Output</div>
-                            <div class="value-data" id="output-values"></div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Top 예측 -->
+                <!-- Top Predictions -->
                 <div class="predictions-section" id="predictions-section" style="display: none;">
-                    <div class="predictions-header">
-                        <h3>Top Predictions</h3>
-                    </div>
+                    <h3>Next Token Predictions</h3>
                     <div class="predictions-list" id="predictions-list"></div>
+                </div>
+
+                <!-- 수치 정보 -->
+                <div class="values-section">
+                    <h3>Current Values</h3>
+                    <div class="value-cards">
+                        <div class="value-card" id="embed-value-card" style="display: none;">
+                            <div class="card-title">Embedding Vector</div>
+                            <div class="card-value" id="embed-value"></div>
+                        </div>
+                        <div class="value-card" id="qkv-value-card" style="display: none;">
+                            <div class="card-title">Q / K / V</div>
+                            <div class="card-value" id="qkv-value"></div>
+                        </div>
+                        <div class="value-card" id="attn-value-card" style="display: none;">
+                            <div class="card-title">Attention Output</div>
+                            <div class="card-value" id="attn-value"></div>
+                        </div>
+                        <div class="value-card" id="ffn-value-card" style="display: none;">
+                            <div class="card-title">FFN Output</div>
+                            <div class="card-value" id="ffn-value"></div>
+                        </div>
+                        <div class="value-card" id="norm-value-card" style="display: none;">
+                            <div class="card-title">Layer Norm</div>
+                            <div class="card-value" id="norm-value"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 실행 로그 -->
+                <div class="log-section">
+                    <div class="log-header">
+                        <h3>Execution Log</h3>
+                        <button id="btn-clear-log" class="btn btn-small">Clear</button>
+                    </div>
+                    <div class="log-container" id="log-container"></div>
                 </div>
             </div>
         </main>
